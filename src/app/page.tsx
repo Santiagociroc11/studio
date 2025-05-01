@@ -1,106 +1,156 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { toZonedTime, format } from "date-fns-tz";
-import { es } from "date-fns/locale";
-import { Calendar, Clock, User, ExternalLink, MapPin } from "lucide-react";
-
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { differenceInSeconds, intervalToDuration } from "date-fns";
+import { es, enUS } from "date-fns/locale";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Calendar, Clock, MapPin, Play } from "lucide-react";
+
+// Convierte offset "+05:00" a horas numéricas
+function parseOffset(offsetStr: string): number {
+  const sign = offsetStr.startsWith("-") ? -1 : 1;
+  const [hrs, mins] = offsetStr.slice(1).split(":").map(Number);
+  return sign * (hrs + mins / 60);
+}
+
+// Contador estilizado
+function CountdownDisplay({ targetDate }: { targetDate: Date }) {
+  const [dur, setDur] = useState(() => intervalToDuration({ start: new Date(), end: targetDate }));
+  useEffect(() => {
+    const tick = () => {
+      const now = new Date();
+      const diff = differenceInSeconds(targetDate, now);
+      if (diff <= 0) {
+        setDur({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+        clearInterval(id);
+        return;
+      }
+      setDur(intervalToDuration({ start: now, end: targetDate }));
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [targetDate]);
+  const parts = [
+    { label: "DÍAS", v: dur.days || 0 },
+    { label: "HORAS", v: dur.hours || 0 },
+    { label: "MIN", v: dur.minutes || 0 },
+    { label: "SEG", v: dur.seconds || 0 },
+  ];
+  return (
+    <div className="text-center">
+      <span className="text-sm uppercase text-gray-500 font-semibold">FALTAN</span>
+      <div className="grid grid-cols-4 gap-2 mt-2">
+        {parts.map(p => (
+          <div key={p.label} className="p-2 bg-red-50 rounded-lg">
+            <span className="block text-2xl font-bold text-red-600">{p.v.toString().padStart(2, '0')}</span>
+            <span className="block text-xs text-red-500 mt-1 uppercase">{p.label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function HomePage() {
-  // — Datos fijos del evento —
-  const eventName = "SEMANA DE LA TERAPIA DEL DOLOR";
-  const eventAuthor = "Gersson Lopez";
-  const scheduleLink = "https://link.automscc.com/Ger-clase1";
-  const eventDateWithOffset = "2025-05-26T19:00:00-05:00"; // ISO con UTC-5
-  const eventDisplayTimeColombia = "Lunes 26 de Mayo de 2025, 7:00 PM";
+  const eventDate = new Date("2025-05-26T19:00:00-05:00");
+  const bogotaTz = "America/Bogota";
 
-  // — Estado local —
-  const [userTimeZone, setUserTimeZone] = useState<string>("");
-  const [localEventTime, setLocalEventTime] = useState<string>("");
+  // Estados de zona y override
+  const [tz, setTz] = useState<string>("UTC");
+  const [by, setBy] = useState<string>("navegador");
+  const [overrideTz, setOverrideTz] = useState<string>("");
+  const [showOv, setShowOv] = useState(false);
 
+  // Horas actuales
+  const [nowCol, setNowCol] = useState<string>("");
+  const [nowLoc, setNowLoc] = useState<string>("");
+  const [offsetDiff, setOffsetDiff] = useState<number>(0);
+  const [lang, setLang] = useState<string>("en-US");
+  const locale = useMemo(() => (lang.startsWith("es") ? es : enUS), [lang]);
+
+  // Detección de zona
   useEffect(() => {
-    // 1. Detectar zona horaria del navegador
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-    setUserTimeZone(tz);
-
-    // 2. Parsear la fecha del evento (ya incluye -05:00) y convertirla a la zona del usuario
-    const eventDate = new Date(eventDateWithOffset);
-    const zonedDate = toZonedTime(eventDate, tz);
-
-    // 3. Formatear en español
-    const formatted = format(
-      zonedDate,
-      "EEEE d 'de' MMMM 'de' yyyy, h:mm a (zzzz)",
-      { locale: es, timeZone: tz }
-    );
-    setLocalEventTime(formatted);
+    if (typeof window === 'undefined') return;
+    const nav = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+    setTz(nav);
+    setBy("navegador");
+    setLang(navigator.language || "en-US");
+    fetch("https://worldtimeapi.org/api/ip")
+      .then(r => r.json())
+      .then((d: { timezone?: string }) => {
+        if (d.timezone && d.timezone !== nav) {
+          setTz(d.timezone);
+          setBy("IP");
+        }
+      })
+      .catch(() => {});
   }, []);
 
+  const activeTz = overrideTz || tz;
+
+  // Actualizar horas cada segundo en formato AM/PM
+  useEffect(() => {
+    const fmt = (d: Date, tzStr: string) =>
+      format(toZonedTime(d, tzStr), "hh:mm:ss a", { timeZone: tzStr });
+    const update = () => {
+      const now = new Date();
+      setNowCol(fmt(now, bogotaTz));
+      setNowLoc(fmt(now, activeTz));
+      const offB = parseOffset(
+        format(now, 'xxx', { timeZone: bogotaTz })
+      );
+      const offL = parseOffset(
+        format(now, 'xxx', { timeZone: activeTz })
+      );
+      setOffsetDiff(parseFloat((offL - offB).toFixed(1)));
+    };
+    update();
+    const iv = setInterval(update, 1000);
+    return () => clearInterval(iv);
+  }, [activeTz]);
+
   return (
-    <div className="flex justify-center items-start pt-16 pb-16 min-h-screen bg-gradient-to-br from-indigo-100 via-white to-pink-100">
-      <Card className="w-full max-w-lg shadow-xl border border-gray-200/50 rounded-2xl overflow-hidden flex flex-col">
-        {/* Header */}
-        <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200 px-6 py-5">
-          <CardTitle className="text-2xl font-bold text-gray-800 tracking-tight">
-            {eventName}
-          </CardTitle>
-          <div className="flex items-center text-sm text-gray-600 pt-2">
-            <User className="h-4 w-4 mr-1.5 text-gray-500" />
-            <span>Por: {eventAuthor}</span>
-          </div>
-        </CardHeader>
-
-        {/* Contenido */}
-        <CardContent className="p-6 md:p-8 space-y-6 flex-grow">
-          {/* Horario original */}
-          <div className="p-4 border border-gray-100 rounded-lg shadow-sm bg-white">
-            <h3 className="text-lg font-semibold text-gray-700 mb-3">
-              Horario Original (Colombia)
-            </h3>
-            <div className="flex items-center space-x-3 bg-blue-50/50 p-3 rounded-lg border border-blue-100">
-              <Calendar className="h-5 w-5 text-blue-600 flex-shrink-0" />
-              <span className="text-gray-800 font-medium text-sm md:text-base">
-                {eventDisplayTimeColombia}
-              </span>
+    <div className="min-h-screen flex items-center justify-center bg-gray-100 p-6">
+      <Card className="w-full max-w-lg rounded-3xl shadow-xl overflow-hidden">
+        <div className="bg-red-600 p-8 text-white text-center">
+          <h1 className="text-4xl font-black uppercase">El evento será el</h1>
+          <p className="mt-2 text-3xl font-bold">LUNES 26 DE MAYO A LAS 7:00 PM</p>
+          <p className="mt-1 text-base">Hora Colombia (UTC-5)</p>
+        </div>
+        <CardContent className="p-6 bg-white space-y-6">
+          <div className="bg-blue-50 p-4 rounded-lg shadow flex items-center space-x-4">
+            <Calendar className="text-blue-600 w-6 h-6" />
+            <div>
+              <p className="text-sm text-blue-700 uppercase font-semibold">Hora actual en Colombia</p>
+              <p className="text-xl font-bold text-blue-800">{nowCol || <Skeleton className="h-6 w-24 inline-block" />}</p>
             </div>
-            <p className="text-xs text-gray-500 mt-2 pl-1">(UTC-5)</p>
           </div>
-
-          <div className="border-t border-dashed border-gray-200"></div>
-
-          {/* Horario local */}
-          <div className="p-4 border border-gray-100 rounded-lg shadow-sm bg-white">
-            <h3 className="text-lg font-semibold text-gray-700 mb-3 flex items-center">
-              <MapPin className="h-5 w-5 mr-2 text-indigo-500" />
-              Tu Horario Local
-            </h3>
-            <div className="flex items-center space-x-3 bg-green-50/60 p-3 rounded-lg border border-green-100">
-              <Clock className="h-5 w-5 text-green-600 flex-shrink-0" />
-              <span className="text-gray-800 font-medium text-sm md:text-base">
-                {localEventTime || "Cargando..."}
-              </span>
+          {offsetDiff !== 0 ? (
+            <div className="bg-green-50 p-4 rounded-lg shadow flex items-center space-x-4">
+              <Clock className="text-green-600 w-6 h-6" />
+              <div>
+                <p className="text-sm text-green-700 uppercase font-semibold">Hora actual (tu zona)</p>
+                <p className="text-xl font-bold text-green-800">{nowLoc || <Skeleton className="h-6 w-24 inline-block" />}</p>
+                <p className="mt-1 text-sm text-gray-600">{Math.abs(offsetDiff)} {Math.abs(offsetDiff) === 1 ? 'hora' : 'horas'} {offsetDiff > 0 ? 'de adelanto' : 'de retraso'} con Colombia</p>
+              </div>
             </div>
-            {userTimeZone && (
-              <p className="text-xs text-gray-400 mt-1 pl-1 font-light">
-                Zona detectada: {userTimeZone}
-              </p>
-            )}
-          </div>
+          ) : (
+            <div className="bg-green-50 p-4 rounded-lg shadow text-center">
+              <p className="text-sm text-green-700 uppercase font-semibold">Tu hora coincide con Colombia</p>
+              <p className="text-xl font-bold text-green-800">{nowLoc || <Skeleton className="h-6 w-24 inline-block" />}</p>
+            </div>
+          )}
+          <CountdownDisplay targetDate={eventDate} />
         </CardContent>
-
-        {/* Footer / Botón */}
-        <div className="px-6 md:px-8 py-4 bg-gray-50 border-t border-gray-200 mt-auto">
-          <a
-            href={scheduleLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block w-full"
-          >
-            <Button className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-semibold py-3 shadow-md hover:shadow-lg transition-shadow duration-200">
-              Agendar Primera Clase
-              <ExternalLink className="h-4 w-4 ml-2" />
+        <div className="p-6 bg-white border-t space-y-4 text-center">
+          <p className="text-gray-600 text-sm">Si quieres tener certeza de a qué hora es... activa el recordatorio en YouTube.</p>
+          <a href="https://link.automscc.com/Ger-clase1" target="_blank" rel="noopener noreferrer">
+            <Button className="w-full bg-red-600 hover:bg-red-700 text-white uppercase font-bold py-4 text-lg rounded-lg shadow-lg flex items-center justify-center">
+              <Play className="mr-2" size={20} /> ACTIVAR RECORDATORIO
             </Button>
           </a>
         </div>
