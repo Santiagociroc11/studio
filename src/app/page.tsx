@@ -56,7 +56,7 @@ function CountdownDisplay({ targetDate }: { targetDate: Date }) {
 }
 
 export default function HomePage() {
-  const eventDate = new Date("2025-05-26T19:00:00-05:00");
+  const eventDate = new Date("2025-08-25T19:00:00-05:00");
   const bogotaTz = "America/Bogota";
 
   // Estados de zona y override
