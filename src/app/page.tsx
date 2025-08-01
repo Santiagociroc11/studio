@@ -118,7 +118,7 @@ export default function HomePage() {
       <Card className="w-full max-w-lg rounded-3xl shadow-xl overflow-hidden">
         <div className="bg-red-600 p-8 text-white text-center">
           <h1 className="text-4xl font-black uppercase">El evento será el</h1>
-          <p className="mt-2 text-3xl font-bold">LUNES 26 DE MAYO A LAS 7:00 PM</p>
+          <p className="mt-2 text-3xl font-bold">LUNES 25 DE AGOSTO A LAS 7:00 PM</p>
           <p className="mt-1 text-base">Hora Colombia (UTC-5)</p>
         </div>
         <CardContent className="p-6 bg-white space-y-6">
@@ -148,7 +148,7 @@ export default function HomePage() {
         </CardContent>
         <div className="p-6 bg-white border-t space-y-4 text-center">
           <p className="text-gray-600 text-sm">Si quieres tener certeza de a qué hora es... activa el recordatorio en YouTube.</p>
-          <a href="https://link.automscc.com/Ger-clase1" target="_blank" rel="noopener noreferrer">
+          <a href="https://link.automscc.com/GERL8-CLASE1" target="_blank" rel="noopener noreferrer">
             <Button className="w-full bg-red-600 hover:bg-red-700 text-white uppercase font-bold py-4 text-lg rounded-lg shadow-lg flex items-center justify-center">
               <Play className="mr-2" size={20} /> ACTIVAR RECORDATORIO
             </Button>
